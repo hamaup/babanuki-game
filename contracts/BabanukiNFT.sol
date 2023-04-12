@@ -18,9 +18,11 @@ contract BabanukiNFT {
     bool public gameStarted = false;
 
     constructor() {
-        for (uint256 i = 1; i <= 53; i++) {
+        for (uint256 i = 1; i <= 52; i++) {
             deck.push(i);
         }
+        // Add Joker
+        deck.push(53);
     }
 
     function sayHello() public pure returns (string memory) {
@@ -62,17 +64,6 @@ contract BabanukiNFT {
             );
         }
     }
-
-    event GameStarted(
-        address indexed player1,
-        address indexed player2,
-        address indexed player3,
-        address player4,
-        uint256[] player1Hand,
-        uint256[] player2Hand,
-        uint256[] player3Hand,
-        uint256[] player4Hand
-    );
 
     function shuffleAndDeal() private {
         for (uint256 i = 0; i < 1000; i++) {
@@ -116,6 +107,17 @@ contract BabanukiNFT {
         checkEmptyHand(player);
     }
 
+    event GameStarted(
+        address indexed player1,
+        address indexed player2,
+        address indexed player3,
+        address player4,
+        uint256[] player1Hand,
+        uint256[] player2Hand,
+        uint256[] player3Hand,
+        uint256[] player4Hand
+    );
+
     function startGame() public {
         require(
             playerAddresses.length == PLAYER_COUNT,
@@ -154,17 +156,22 @@ contract BabanukiNFT {
 
     function resetGame() public {
         require(gameStarted, "Game has not started yet.");
-        //require(checkAllPlayersFinished(), "Game is not finished yet.");
 
         gameStarted = false;
+
         for (uint256 i = 0; i < playerAddresses.length; i++) {
             address playerAddress = playerAddresses[i];
-            players[playerAddress].hand = new uint256[](0);
-            players[playerAddress].discarded = new uint256[](0);
+
+            // Clear player's hand and discarded pile
+            delete players[playerAddress].hand;
+            delete players[playerAddress].discarded;
+
+            // Reset player's ranking and empty hand flag
             players[playerAddress].ranking = 0;
             players[playerAddress].hasEmptyHand = false;
         }
 
+        // Shuffle the deck
         shuffleDeck();
     }
 
