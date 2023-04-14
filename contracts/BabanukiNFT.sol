@@ -16,13 +16,17 @@ contract BabanukiNFT {
     address[] public playerAddresses;
     uint256[] public deck;
     bool public gameStarted = false;
+    bool public gameOverFlag = false;
+    uint256 rankingCounter = 1;
 
     constructor() {
-        for (uint256 i = 1; i <= 52; i++) {
-            deck.push(i);
+        for (uint256 suit = 1; suit <= 4; suit++) {
+            for (uint256 rank = 1; rank <= 13; rank++) {
+                deck.push(suit * 100 + rank);
+            }
         }
         // Add Joker
-        deck.push(53);
+        deck.push(999);
     }
 
     function sayHello() public pure returns (string memory) {
@@ -84,21 +88,21 @@ contract BabanukiNFT {
     function discardPairs(address player) private {
         uint256[] storage hand = players[player].hand;
         uint256[] storage discarded = players[player].discarded;
-        uint256 handLength = hand.length;
 
-        for (uint256 i = 0; i < handLength; i++) {
+        for (uint256 i = 0; i < hand.length; i++) {
             if (hand[i] == 0) {
                 continue;
             }
-            for (uint256 j = i + 1; j < handLength; j++) {
+            for (uint256 j = i + 1; j < hand.length; j++) {
                 if (hand[j] == 0) {
                     continue;
                 }
-                if (hand[i] % 13 == hand[j] % 13) {
+                if (hand[i] % 100 == hand[j] % 100) {
+                    // Comparing ranks
                     discarded.push(hand[i]);
                     discarded.push(hand[j]);
-                    hand[i] = 0;
-                    hand[j] = 0;
+                    hand[i] = 0; // Remove card from hand
+                    hand[j] = 0; // Remove card from hand
                     break;
                 }
             }
@@ -171,9 +175,28 @@ contract BabanukiNFT {
             players[playerAddress].hasEmptyHand = false;
         }
 
+        rankingCounter = 1;
+
         // Shuffle the deck
         shuffleDeck();
     }
+
+    event PlayerFinished(
+        address indexed playerAddress,
+        bool hasEmptyHand,
+        uint256 ranking
+    );
+    event GameOver(
+        bool GameOverFlag,
+        address indexed player1,
+        address indexed player2,
+        address indexed player3,
+        address player4,
+        uint256 player1Ranking,
+        uint256 player2Ranking,
+        uint256 player3Ranking,
+        uint256 player4Ranking
+    );
 
     function checkEmptyHand(address player) private {
         uint256 nonZeroCards = 0;
@@ -182,16 +205,120 @@ contract BabanukiNFT {
                 nonZeroCards++;
             }
         }
-        players[player].hasEmptyHand = nonZeroCards == 0;
+        if (nonZeroCards == 0 && players[player].hasEmptyHand == false) {
+            players[player].hasEmptyHand = true;
+            players[player].ranking = rankingCounter;
+            rankingCounter++;
+        }
     }
 
-    // function checkAllPlayersFinished() private view returns (bool) {
-    //     uint256 finishedPlayers = 0;
-    //     for (uint256 i = 0; i < playerAddresses.length; i++) {
-    //         if (players[playerAddresses[i]].hasEmptyHand) {
-    //             finishedPlayers += 1;
-    //         }
-    //     }
-    //     return finishedPlayers == PLAYER_COUNT;
-    // }
+    function checkAllPlayersFinished() private returns (bool) {
+        uint256 emptyHandPlayers = 0;
+        address lastPlayer;
+
+        // 手札が空のプレイヤーを探す
+        for (uint256 i = 0; i < playerAddresses.length; i++) {
+            if (players[playerAddresses[i]].hasEmptyHand) {
+                emptyHandPlayers++;
+            } else {
+                lastPlayer = playerAddresses[i];
+            }
+        }
+
+        // 最後に手札を持っていたプレイヤーのランキングを最下位にする
+        if (emptyHandPlayers == PLAYER_COUNT - 1) {
+            players[lastPlayer].ranking = PLAYER_COUNT;
+            return true;
+        }
+
+        return false;
+    }
+
+    event CardDrawn(
+        address indexed player1,
+        address indexed player2,
+        address indexed player3,
+        address player4,
+        uint256[] player1Hand,
+        uint256[] player2Hand,
+        uint256[] player3Hand,
+        uint256[] player4Hand
+    );
+
+    function drawCard(
+        uint256 playerIndex,
+        uint256 targetPlayerIndex,
+        uint256 targetCardIndex
+    ) external {
+        address player = playerAddresses[playerIndex];
+        address targetPlayer = playerAddresses[targetPlayerIndex];
+        uint256[] storage targetPlayerHand = players[targetPlayer].hand;
+
+        require(
+            targetCardIndex < targetPlayerHand.length,
+            "Invalid card index."
+        );
+        require(
+            players[player].hasEmptyHand == false,
+            "Player has already finished."
+        );
+        require(
+            players[targetPlayer].hasEmptyHand == false,
+            "Target player has already finished."
+        );
+
+        uint256 drawnCard = targetPlayerHand[targetCardIndex];
+        require(drawnCard != 0, "Card not found in target player's hand.");
+
+        targetPlayerHand[targetCardIndex] = 0; // Mark card as removed in target player's hand
+        players[player].hand.push(drawnCard); // Add drawn card to current player's hand
+
+        discardPairs(player);
+
+        checkEmptyHand(player);
+        if (players[player].hasEmptyHand) {
+            emit PlayerFinished(
+                player,
+                players[player].hasEmptyHand,
+                players[player].ranking
+            );
+        }
+
+        checkEmptyHand(targetPlayer);
+        if (players[targetPlayer].hasEmptyHand) {
+            emit PlayerFinished(
+                targetPlayer,
+                players[targetPlayer].hasEmptyHand,
+                players[targetPlayer].ranking
+            );
+        }
+
+        if (checkAllPlayersFinished()) {
+            // Emit the GameOver event
+            emit GameOver(
+                gameOverFlag,
+                playerAddresses[0],
+                playerAddresses[1],
+                playerAddresses[2],
+                playerAddresses[3],
+                players[playerAddresses[0]].ranking,
+                players[playerAddresses[1]].ranking,
+                players[playerAddresses[2]].ranking,
+                players[playerAddresses[3]].ranking
+            );
+
+            // Reset the game or perform any other desired actions for game over
+            resetGame();
+        }
+        emit CardDrawn(
+            playerAddresses[0],
+            playerAddresses[1],
+            playerAddresses[2],
+            playerAddresses[3],
+            players[playerAddresses[0]].hand,
+            players[playerAddresses[1]].hand,
+            players[playerAddresses[2]].hand,
+            players[playerAddresses[3]].hand
+        );
+    }
 }
