@@ -1,25 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
+import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract BabanukiNFT {
-    uint256 public constant PLAYER_COUNT = 4;
+contract BabanukiNFT is ERC721URIStorage {
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
+    bool public gameStarted = false;
+    bool public gameOverFlag = false;
+    uint8 rankingCounter = 1;
+    uint8 public constant PLAYER_COUNT = 4;
+    uint256 public maxTokenId;
+    address winner;
+    uint256[] public deck;
+    address[] public playerAddresses;
+    mapping(address => Player) public players;
 
     struct Player {
         address playerAddress;
         uint256[] hand;
         uint256[] discarded;
-        uint256 ranking;
+        uint8 ranking;
         bool hasEmptyHand;
     }
 
-    mapping(address => Player) public players;
-    address[] public playerAddresses;
-    uint256[] public deck;
-    bool public gameStarted = false;
-    bool public gameOverFlag = false;
-    uint256 rankingCounter = 1;
-
-    constructor() {
+    constructor() ERC721("BBNItem", "BBN") {
         for (uint256 suit = 1; suit <= 4; suit++) {
             for (uint256 rank = 1; rank <= 13; rank++) {
                 deck.push(suit * 100 + rank);
@@ -69,6 +74,45 @@ contract BabanukiNFT {
         }
     }
 
+    event GameStarted(
+        address indexed player1,
+        address indexed player2,
+        address indexed player3,
+        address player4,
+        uint256[] player1Hand,
+        uint256[] player2Hand,
+        uint256[] player3Hand,
+        uint256[] player4Hand
+    );
+
+    function startGame() public {
+        require(
+            playerAddresses.length == PLAYER_COUNT,
+            "Not enough players to start the game."
+        );
+        require(!gameStarted, "Game has already started.");
+        gameStarted = true;
+
+        shuffleAndDeal();
+
+        for (uint256 i = 0; i < playerAddresses.length; i++) {
+            discardPairs(playerAddresses[i]);
+        }
+
+        winner = address(0);
+
+        emit GameStarted(
+            playerAddresses[0],
+            playerAddresses[1],
+            playerAddresses[2],
+            playerAddresses[3],
+            players[playerAddresses[0]].hand,
+            players[playerAddresses[1]].hand,
+            players[playerAddresses[2]].hand,
+            players[playerAddresses[3]].hand
+        );
+    }
+
     function shuffleAndDeal() private {
         for (uint256 i = 0; i < 1000; i++) {
             uint256 a = uint256(
@@ -81,7 +125,7 @@ contract BabanukiNFT {
         }
 
         for (uint256 i = 0; i < 53; i++) {
-            players[playerAddresses[i % 4]].hand.push(deck[i]);
+            players[playerAddresses[i % PLAYER_COUNT]].hand.push(deck[i]);
         }
     }
 
@@ -109,43 +153,6 @@ contract BabanukiNFT {
         }
 
         checkEmptyHand(player);
-    }
-
-    event GameStarted(
-        address indexed player1,
-        address indexed player2,
-        address indexed player3,
-        address player4,
-        uint256[] player1Hand,
-        uint256[] player2Hand,
-        uint256[] player3Hand,
-        uint256[] player4Hand
-    );
-
-    function startGame() public {
-        require(
-            playerAddresses.length == PLAYER_COUNT,
-            "Not enough players to start the game."
-        );
-        require(!gameStarted, "Game has already started.");
-        gameStarted = true;
-
-        shuffleAndDeal();
-
-        for (uint256 i = 0; i < playerAddresses.length; i++) {
-            discardPairs(playerAddresses[i]);
-        }
-
-        emit GameStarted(
-            playerAddresses[0],
-            playerAddresses[1],
-            playerAddresses[2],
-            playerAddresses[3],
-            players[playerAddresses[0]].hand,
-            players[playerAddresses[1]].hand,
-            players[playerAddresses[2]].hand,
-            players[playerAddresses[3]].hand
-        );
     }
 
     function shuffleDeck() internal {
@@ -187,11 +194,6 @@ contract BabanukiNFT {
         uint256 ranking
     );
     event GameOver(
-        bool GameOverFlag,
-        address indexed player1,
-        address indexed player2,
-        address indexed player3,
-        address player4,
         uint256 player1Ranking,
         uint256 player2Ranking,
         uint256 player3Ranking,
@@ -235,10 +237,6 @@ contract BabanukiNFT {
     }
 
     event CardDrawn(
-        address indexed player1,
-        address indexed player2,
-        address indexed player3,
-        address player4,
         uint256[] player1Hand,
         uint256[] player2Hand,
         uint256[] player3Hand,
@@ -294,13 +292,18 @@ contract BabanukiNFT {
         }
 
         if (checkAllPlayersFinished()) {
+            gameOverFlag = true;
+
+            // Set the winner's address
+            for (uint256 i = 0; i < playerAddresses.length; i++) {
+                if (players[playerAddresses[i]].ranking == 1) {
+                    winner = playerAddresses[i];
+                    break;
+                }
+            }
+
             // Emit the GameOver event
             emit GameOver(
-                gameOverFlag,
-                playerAddresses[0],
-                playerAddresses[1],
-                playerAddresses[2],
-                playerAddresses[3],
                 players[playerAddresses[0]].ranking,
                 players[playerAddresses[1]].ranking,
                 players[playerAddresses[2]].ranking,
@@ -311,14 +314,45 @@ contract BabanukiNFT {
             resetGame();
         }
         emit CardDrawn(
-            playerAddresses[0],
-            playerAddresses[1],
-            playerAddresses[2],
-            playerAddresses[3],
             players[playerAddresses[0]].hand,
             players[playerAddresses[1]].hand,
             players[playerAddresses[2]].hand,
             players[playerAddresses[3]].hand
         );
+    }
+
+    event NFTAwarded(
+        address indexed recipient,
+        uint256 indexed tokenId,
+        string tokenURI
+    );
+
+    function awardItem(
+        address player,
+        string memory tokenURI
+    ) internal returns (uint256) {
+        uint256 newItemId = _tokenIds.current();
+        _mint(player, newItemId);
+        _setTokenURI(newItemId, tokenURI);
+
+        _tokenIds.increment();
+
+        // Update maxTokenId
+        if (newItemId > maxTokenId) {
+            maxTokenId = newItemId;
+        }
+
+        // Emit the NFTAwarded event
+        emit NFTAwarded(player, newItemId, tokenURI);
+
+        return newItemId;
+    }
+
+    function claimNFT(string memory tokenURI) public {
+        require(gameOverFlag, "Game is not over yet.");
+        require(winner == msg.sender, "Only the winner can claim NFT.");
+
+        awardItem(msg.sender, tokenURI);
+        winner = address(0);
     }
 }
