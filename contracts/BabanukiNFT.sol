@@ -266,9 +266,7 @@ contract BabanukiNFT is ERC721URIStorage {
             targetCardIndex,
             nextPlayerIndex,
             players[playerAddresses[0]].hand,
-            players[playerAddresses[1]].hand,
-            players[playerAddresses[2]].hand,
-            players[playerAddresses[3]].hand
+            players[playerAddresses[1]].hand
         );
         nextTurn(nextPlayerIndex);
     }
@@ -297,31 +295,6 @@ contract BabanukiNFT is ERC721URIStorage {
         require(gameStarted, "Game has not started yet.");
         require(!gameOverFlag, "Game is over.");
 
-        if (players[playerAddresses[currentPlayerIndex]].hasEmptyHand) {
-            currentPlayerIndex = (currentPlayerIndex + 1) % PLAYER_COUNT;
-        }
-
-        uint8 nextPlayerIndex = (currentPlayerIndex + 1) % PLAYER_COUNT;
-        uint8 targetPlayerIndex = (currentPlayerIndex + 1) % PLAYER_COUNT;
-
-        if (players[playerAddresses[targetPlayerIndex]].hasEmptyHand) {
-            do {
-                targetPlayerIndex = (targetPlayerIndex + 1) % PLAYER_COUNT;
-            } while (
-                targetPlayerIndex != currentPlayerIndex &&
-                    players[playerAddresses[targetPlayerIndex]].hasEmptyHand
-            );
-        }
-
-        if (players[playerAddresses[nextPlayerIndex]].hasEmptyHand) {
-            do {
-                nextPlayerIndex = (nextPlayerIndex + 1) % PLAYER_COUNT;
-            } while (
-                nextPlayerIndex != currentPlayerIndex &&
-                    players[playerAddresses[nextPlayerIndex]].hasEmptyHand
-            );
-        }
-
         if (!players[playerAddresses[currentPlayerIndex]].isHuman) {
             uint256 chosenCard = chooseRandomCard(
                 playerAddresses[targetPlayerIndex]
@@ -334,18 +307,13 @@ contract BabanukiNFT is ERC721URIStorage {
             );
             currentPlayerIndex = nextPlayerIndex;
         }
-        //emit NextTurn(currentPlayerIndex, nextPlayerIndex, targetPlayerIndex);
     }
 
     event GameStarted(
         address indexed player1,
         address indexed player2,
-        address indexed player3,
-        address player4,
         uint256[] player1Hand,
-        uint256[] player2Hand,
-        uint256[] player3Hand,
-        uint256[] player4Hand
+        uint256[] player2Hand
     );
 
     function startGame() public {
@@ -391,13 +359,9 @@ contract BabanukiNFT is ERC721URIStorage {
 
         emit GameStarted(
             playerAddresses[0],
-            playerAddresses[1],
-            playerAddresses[2],
-            playerAddresses[3],
+            playerAddresses[1]
             players[playerAddresses[0]].hand,
-            players[playerAddresses[1]].hand,
-            players[playerAddresses[2]].hand,
-            players[playerAddresses[3]].hand
+            players[playerAddresses[1]].hand
         );
         nextTurn(0);
     }
