@@ -14,7 +14,7 @@ module.exports = {
       },
     },
   },
-  defaultNetwork: "localhost",
+  defaultNetwork: "sandverse",
   networks: {
     hardhat: {},
     sandverse: {

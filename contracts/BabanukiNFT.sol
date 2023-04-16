@@ -8,7 +8,6 @@ contract BabanukiNFT is ERC721URIStorage {
     Counters.Counter private _tokenIds;
     bool public gameStarted = false;
     bool public gameOverFlag = false;
-    uint8 rankingCounter = 1;
     uint8 public constant PLAYER_COUNT = 2;
     uint256 public maxTokenId;
     address winner;
@@ -20,8 +19,6 @@ contract BabanukiNFT is ERC721URIStorage {
         address playerAddress;
         uint256[] hand;
         uint256[] discarded;
-        uint8 ranking;
-        bool hasEmptyHand;
         bool isHuman;
     }
 
@@ -42,7 +39,7 @@ contract BabanukiNFT is ERC721URIStorage {
         return playerAddresses.length;
     }
 
-    function joinGame(address playerAddress) public {
+    function joinGame() public {
         require(!gameStarted, "Game has already started.");
         require(
             playerAddresses.length + 1 <= PLAYER_COUNT,
@@ -51,33 +48,28 @@ contract BabanukiNFT is ERC721URIStorage {
 
         bool hasJoined = false;
         for (uint256 j = 0; j < playerAddresses.length; j++) {
-            if (playerAddresses[j] == playerAddress) {
+            if (playerAddresses[j] == msg.sender) {
                 hasJoined = true;
                 break;
             }
         }
         require(!hasJoined, "Player has already joined.");
 
-        playerAddresses.push(playerAddress);
-        players[playerAddress] = Player(
-            playerAddress,
+        playerAddresses.push(msg.sender);
+        players[msg.sender] = Player(
+            msg.sender,
             new uint256[](0),
             new uint256[](0),
-            0,
-            false,
             true
         );
     }
 
     function shuffleAndDeal() private {
-        for (uint256 i = 0; i < 1000; i++) {
-            uint256 a = uint256(
+        for (uint256 i = deck.length; i > 1; i--) {
+            uint256 j = uint256(
                 keccak256(abi.encodePacked(block.timestamp, i))
-            ) % 53;
-            uint256 b = uint256(
-                keccak256(abi.encodePacked(block.timestamp, i + 1))
-            ) % 53;
-            (deck[a], deck[b]) = (deck[b], deck[a]);
+            ) % i;
+            (deck[i - 1], deck[j]) = (deck[j], deck[i - 1]);
         }
 
         for (uint256 i = 0; i < 53; i++) {
@@ -115,92 +107,30 @@ contract BabanukiNFT is ERC721URIStorage {
         while (hand.length > writeIndex) {
             hand.pop();
         }
-        checkEmptyHand(player);
-    }
-
-    function shuffleDeck() internal {
-        for (uint256 i = 52; i > 0; i--) {
-            uint256 j = uint256(
-                keccak256(abi.encodePacked(block.timestamp, block.difficulty))
-            ) % (i + 1);
-            (deck[i], deck[j]) = (deck[j], deck[i]);
-        }
     }
 
     function resetGame() public {
         require(gameStarted, "Game has not started yet.");
 
         gameStarted = false;
+        gameOverFlag = false;
 
         for (uint256 i = 0; i < playerAddresses.length; i++) {
             address playerAddress = playerAddresses[i];
             delete players[playerAddress].hand;
             delete players[playerAddress].discarded;
-            players[playerAddress].ranking = 0;
-            players[playerAddress].hasEmptyHand = false;
         }
 
         delete playerAddresses;
-        rankingCounter = 1;
-        shuffleDeck();
     }
 
-    event PlayerFinished(
-        address indexed playerAddress,
-        bool hasEmptyHand,
-        uint256 ranking
-    );
-    event GameOver(
-        uint256 player1Ranking,
-        uint256 player2Ranking,
-        uint256 player3Ranking,
-        uint256 player4Ranking
-    );
-
-    function checkEmptyHand(address player) private {
-        if (players[player].hand.length == 0) {
-            players[player].hasEmptyHand = true;
-            players[player].ranking = rankingCounter;
-            rankingCounter++;
-        }
-    }
-
-    function checkAllPlayersFinished() private returns (bool) {
-        uint256 emptyHandPlayers = 0;
-        address lastPlayer;
-
-        for (uint256 i = 0; i < playerAddresses.length; i++) {
-            if (players[playerAddresses[i]].hasEmptyHand) {
-                emptyHandPlayers++;
-            } else {
-                lastPlayer = playerAddresses[i];
-            }
-        }
-
-        if (emptyHandPlayers == PLAYER_COUNT - 1) {
-            players[lastPlayer].ranking = PLAYER_COUNT;
-            return true;
-        }
-
-        return false;
-    }
-
-    event CardDrawn(
-        uint256 playerIndex,
-        uint256 targetPlayerIndex,
-        uint256 targetCardIndex,
-        uint8 nextPlayerIndex,
-        uint256[] player1Hand,
-        uint256[] player2Hand,
-        uint256[] player3Hand,
-        uint256[] player4Hand
-    );
+    event CardDrawn(uint256[] player1Hand, uint256[] player2Hand);
+    event GameOver(address winner);
 
     function drawCard(
-        uint256 playerIndex,
-        uint256 targetPlayerIndex,
-        uint256 targetCardIndex,
-        uint8 nextPlayerIndex
+        uint8 playerIndex,
+        uint8 targetPlayerIndex,
+        uint256 targetCardIndex
     ) public {
         address player = playerAddresses[playerIndex];
         address targetPlayer = playerAddresses[targetPlayerIndex];
@@ -223,52 +153,26 @@ contract BabanukiNFT is ERC721URIStorage {
 
         discardPairs(player);
 
-        checkEmptyHand(player);
-        if (players[player].hasEmptyHand) {
-            emit PlayerFinished(
-                player,
-                players[player].hasEmptyHand,
-                players[player].ranking
-            );
+        bool gameOver = false;
+
+        if (players[player].hand.length == 0) {
+            winner = player;
+            gameOver = true;
+        } else if (players[targetPlayer].hand.length == 0) {
+            winner = targetPlayer;
+            gameOver = true;
         }
 
-        checkEmptyHand(targetPlayer);
-        if (players[targetPlayer].hasEmptyHand) {
-            emit PlayerFinished(
-                targetPlayer,
-                players[targetPlayer].hasEmptyHand,
-                players[targetPlayer].ranking
-            );
-        }
-
-        if (checkAllPlayersFinished()) {
-            gameOverFlag = true;
-
-            for (uint256 i = 0; i < playerAddresses.length; i++) {
-                if (players[playerAddresses[i]].ranking == 1) {
-                    winner = playerAddresses[i];
-                    break;
-                }
-            }
-
-            emit GameOver(
-                players[playerAddresses[0]].ranking,
-                players[playerAddresses[1]].ranking,
-                players[playerAddresses[2]].ranking,
-                players[playerAddresses[3]].ranking
-            );
-
+        if (gameOver) {
+            emit GameOver(winner);
             resetGame();
+        } else {
+            emit CardDrawn(
+                players[playerAddresses[0]].hand,
+                players[playerAddresses[1]].hand
+            );
+            nextTurn(targetPlayerIndex);
         }
-        emit CardDrawn(
-            playerIndex,
-            targetPlayerIndex,
-            targetCardIndex,
-            nextPlayerIndex,
-            players[playerAddresses[0]].hand,
-            players[playerAddresses[1]].hand
-        );
-        nextTurn(nextPlayerIndex);
     }
 
     function chooseRandomCard(
@@ -281,7 +185,8 @@ contract BabanukiNFT is ERC721URIStorage {
                 abi.encodePacked(
                     block.timestamp,
                     block.difficulty,
-                    block.number
+                    block.number,
+                    targetPlayerAddress
                 )
             )
         ) % targetHand.length;
@@ -289,23 +194,23 @@ contract BabanukiNFT is ERC721URIStorage {
         return randomIndex;
     }
 
-    //event NextTurn(uint8 currentPlayer, uint8 nextPlayer, uint8 targetPlayer);
+    event NpcTurn(
+        uint8 currentPlayerIndex,
+        uint8 targetPlayerIndex,
+        uint256 chosenCard
+    );
 
     function nextTurn(uint8 currentPlayerIndex) public {
         require(gameStarted, "Game has not started yet.");
         require(!gameOverFlag, "Game is over.");
+        uint8 targetPlayerIndex = (currentPlayerIndex + 1) % PLAYER_COUNT;
 
         if (!players[playerAddresses[currentPlayerIndex]].isHuman) {
             uint256 chosenCard = chooseRandomCard(
                 playerAddresses[targetPlayerIndex]
             );
-            drawCard(
-                currentPlayerIndex,
-                targetPlayerIndex,
-                chosenCard,
-                nextPlayerIndex
-            );
-            currentPlayerIndex = nextPlayerIndex;
+            emit NpcTurn(currentPlayerIndex, targetPlayerIndex, chosenCard);
+            drawCard(currentPlayerIndex, targetPlayerIndex, chosenCard);
         }
     }
 
@@ -337,8 +242,6 @@ contract BabanukiNFT is ERC721URIStorage {
                 npcAddress,
                 new uint256[](0),
                 new uint256[](0),
-                0,
-                false,
                 false
             );
         }
@@ -359,7 +262,7 @@ contract BabanukiNFT is ERC721URIStorage {
 
         emit GameStarted(
             playerAddresses[0],
-            playerAddresses[1]
+            playerAddresses[1],
             players[playerAddresses[0]].hand,
             players[playerAddresses[1]].hand
         );
@@ -390,7 +293,6 @@ contract BabanukiNFT is ERC721URIStorage {
     }
 
     function claimNFT(string memory tokenURI) public {
-        require(gameOverFlag, "Game is not over yet.");
         require(winner == msg.sender, "Only the winner can claim NFT.");
         awardItem(msg.sender, tokenURI);
         winner = address(0);
