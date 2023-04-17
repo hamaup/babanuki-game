@@ -1,4 +1,4 @@
-# BΛBΛNUKI
+# BΛBΛNUKI　スマートコントラクト
 
 ## 概要
 
@@ -14,7 +14,7 @@
 
 ## フロント側のコードはこちら
 
-
+https://github.com/hamaup/babanuki-front
 
 ## 動作映像
 
