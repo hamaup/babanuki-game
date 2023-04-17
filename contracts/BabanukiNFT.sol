@@ -124,7 +124,12 @@ contract BabanukiNFT is ERC721URIStorage {
         delete playerAddresses;
     }
 
-    event CardDrawn(uint256[] player1Hand, uint256[] player2Hand);
+    event CardDrawn(
+        uint256[] player1Hand,
+        uint256[] player2Hand,
+        uint256[] player1Discarded,
+        uint256[] player2Discarded
+    );
     event GameOver(address winner);
 
     function drawCard(
@@ -153,6 +158,13 @@ contract BabanukiNFT is ERC721URIStorage {
 
         discardPairs(player);
 
+        emit CardDrawn(
+            players[playerAddresses[0]].hand,
+            players[playerAddresses[1]].hand,
+            players[playerAddresses[0]].discarded,
+            players[playerAddresses[1]].discarded
+        );
+
         bool gameOver = false;
 
         if (players[player].hand.length == 0) {
@@ -167,10 +179,6 @@ contract BabanukiNFT is ERC721URIStorage {
             emit GameOver(winner);
             resetGame();
         } else {
-            emit CardDrawn(
-                players[playerAddresses[0]].hand,
-                players[playerAddresses[1]].hand
-            );
             nextTurn(targetPlayerIndex);
         }
     }
@@ -256,6 +264,9 @@ contract BabanukiNFT is ERC721URIStorage {
 
         for (uint256 i = 0; i < playerAddresses.length; i++) {
             discardPairs(playerAddresses[i]);
+        }
+        for (uint256 i = 0; i < playerAddresses.length; i++) {
+            players[playerAddresses[i]].discarded = new uint256[](0);
         }
 
         winner = address(0);
