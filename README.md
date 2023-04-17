@@ -18,11 +18,14 @@ OasysのSAND Verse (Verse Layer)に配置してます。
 SAND Verse (Verse Layer)
 Please refer to SAND Verse to learn about SAND verse.
 
-|ChainID	|20197|
-|Currency Symbol|	OAS|
-|RPC	|https://rpc.sandverse.oasys.games/|
-|Explorer|	https://scan.sandverse.oasys.games/|
-|Web Socket	|wss://ws.sandverse.oasys.games|
+|     Parameter     |         Value          |
+|:-----------------:|:---------------------:|
+|     ChainID       |         20197         |
+| Currency Symbol   |          OAS          |
+|        RPC        | https://rpc.sandverse.oasys.games/ |
+|     Explorer      | https://scan.sandverse.oasys.games/ |
+|     Web Socket    | wss://ws.sandverse.oasys.games |
+
 
 https://docs.oasys.games/docs/staking/rpc-endpoint/1-1-rpc-endpoint
 
